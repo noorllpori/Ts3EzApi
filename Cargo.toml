@@ -29,6 +29,8 @@ static-link = ["sdl2/static-link"]
 default-tls = ["reqwest/charset", "reqwest/default-tls", "reqwest/http2"]
 
 [dependencies]
+smol = "1.3"
+async-net = "2.0"
 sdl2 = { version = "0.37", features = ["bundled"] }
 tsclientlib = { path = "./tsclientlib" }  # 使用路径依赖
 anyhow = "1.0"                           # 用于错误处理

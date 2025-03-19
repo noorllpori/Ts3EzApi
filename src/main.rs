@@ -5,7 +5,11 @@ use futures::prelude::*;
 use tracing::{debug, info};
 
 use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::io::{self,Read, Write};
+
+// socket
+use smol::net::TcpListener;
+use smol::block_on;
 
 // use tokio::signal;
 use tokio::sync::mpsc;
@@ -200,12 +204,40 @@ async fn main() -> Result<()> {
     // 获取参数值，如果未提供则使用默认值
     let ip: &String = matches.get_one::<String>("ip").unwrap();
     let name: &String = matches.get_one::<String>("name").unwrap();
-    let io_port= matches.get_one::<String>("io").unwrap();
+    let io_port: &String= matches.get_one::<String>("io").unwrap();
 
     // 打印解析结果
     println!("IP Address: {}", ip);
     println!("Client Name: {}", name);
     println!("I/O Port: {}", io_port);
+
+    // 开始构建 Socket 服务端
+    let addrw: String = format!("127.0.0.1:{}", io_port);
+
+    block_on(async {
+        // 绑定到 127.0.0.1:8080
+        let listener = TcpListener::bind(&addrw).await.unwrap();
+        println!("Listening on {}", addrw);
+
+        loop {
+            // 等待客户端连接
+            let (mut stream, addr) = listener.accept().await.unwrap();
+            println!("New connection from: {}", addr);
+
+            // 处理客户端请求
+            smol::spawn(async move {
+                let mut buffer = [0; 1024];
+
+                // 读取客户端数据
+                let n = stream.read(&mut buffer).await.unwrap();
+                println!("Received: {}", String::from_utf8_lossy(&buffer[..n]));
+
+                // 发送响应
+                stream.write_all(b"Hello from Smol server!").await.unwrap();
+            })
+            .detach(); // 任务分离，不阻塞主循环
+        }
+    });
 
     // 準備參數
 	let con_id = ConnectionId(0);
@@ -288,7 +320,7 @@ async fn main() -> Result<()> {
 				if let Err(error) = t2a.play_packet((con_id, from), packet) {
 					debug!(%error, "Failed to play packet");
 				}
-                
+
                 // // 获取到流
                 // let _empty = packet.data().data().data().len() <= 1;
                 // let codec = packet.data().data().codec(); 
