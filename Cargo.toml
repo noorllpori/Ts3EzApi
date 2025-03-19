@@ -1,0 +1,67 @@
+[package]
+name = "Ts3EzApi"
+version = "0.1.0"
+authors = ["Ninniku"]
+description = "单机多端Ts3客户端Api接口"
+edition = "2021"
+license = ""
+
+[workspace]
+resolver = "2"
+members = [
+	"tsclientlib",
+	"tsproto",
+	"utils/ts-bookkeeping",
+	"utils/tsproto-packets",
+	"utils/tsproto-structs",
+	"utils/tsproto-types",
+]
+
+[features]
+default = ["audio", "default-tls"]
+# Enable the unstable api
+unstable = []
+audio = ["audiopus"]
+bundled = ["sdl2/bundled"]
+static-link = ["sdl2/static-link"]
+# Enable default reqwest features.
+# Use default-features=false on tsclientlib to configure reqwest differently.
+default-tls = ["reqwest/charset", "reqwest/default-tls", "reqwest/http2"]
+
+[dependencies]
+sdl2 = { version = "0.37", features = ["bundled"] }
+tsclientlib = { path = "./tsclientlib" }  # 使用路径依赖
+anyhow = "1.0"                           # 用于错误处理
+clap = { version = "4.0", features = ["derive"] }  # 用于命令行参数解析
+# tokio = { version = "1.0", features = ["full"] }   # 异步运行时
+futures = "0.3"                          # 用于异步编程工具
+audiopus = { version = "0.3.0-rc.0", optional = true }
+base64 = "0.22"
+git-testament = "0.2"
+itertools = "0.13"
+num-traits = "0.2"
+pin-utils = "0.1"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false }
+thiserror = "1"
+time = "0.3"
+tokio = { version = "1", features = ["full", "time", "signal"] }
+tokio-stream = "0.1"
+tracing = "0.1"
+hickory-proto = "0.24"
+hickory-resolver = "0.24"
+ts-bookkeeping = { path = "utils/ts-bookkeeping", version = "0.1" }
+tsproto = { path = "tsproto", version = "0.2" }
+tsproto-packets = { path = "utils/tsproto-packets", version = "0.1" }
+tsproto-types = { path = "utils/tsproto-types", version = "0.1" }
+url = "2"
+
+[dev-dependencies]
+anyhow = "1"
+audiopus = "0.3.0-rc.0"
+once_cell = "1"
+quickcheck = "1"
+quickcheck_macros = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["io-util", "net", "rt-multi-thread", "rt", "signal"] }
+tracing-subscriber = "0.3"
