@@ -17,6 +17,9 @@ use crate::ConnectionId;
 type Id = (ConnectionId, ClientId);
 type AudioHandler = tsclientlib::audio::AudioHandler<Id>;
 
+use std::fs::OpenOptions;
+use std::io::{self, Write};
+
 pub struct TsToAudio {
 	audio_subsystem: AudioSubsystem,
 	device: AudioDevice<SdlCallback>,
@@ -25,6 +28,40 @@ pub struct TsToAudio {
 
 struct SdlCallback {
 	data: Arc<Mutex<AudioHandler>>,
+}
+
+fn vec_f32_to_i16_linear(buffer: &mut [f32]) -> Vec<i16> {
+    buffer
+        .iter_mut()
+        .map(|x| {
+            let scaled = *x * 65535.0 * 1.6;
+            // let scaled = *x * 32767.5 + 32767.5;
+            scaled.clamp(-65535.0, 65535.0) as i16
+        })
+        .collect()
+}
+
+
+fn write_vec_i16_to_file(data: &[i16], filename: &str) -> io::Result<()> {
+    // 打开文件（追加模式，如果文件不存在则创建）
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(filename)?;
+
+    // 将 Vec<i16> 转换为字节数组
+    let bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            data.as_ptr() as *const u8,
+            data.len() * std::mem::size_of::<i16>(),
+        )
+    };
+
+    // 将字节数组写入文件
+    file.write_all(bytes)?;
+
+    Ok(())
 }
 
 impl TsToAudio {
@@ -105,6 +142,18 @@ impl TsToAudio {
 	}
 }
 
+// impl AudioCallback for SdlCallback {
+// 	type Channel = f32;
+// 	fn callback(&mut self, buffer: &mut [Self::Channel]) {
+// 		// Clear buffer
+// 		for d in &mut *buffer {
+// 			*d = 0.0;
+// 		}
+// 		let mut data = self.data.lock().unwrap();
+// 		data.fill_buffer(buffer);
+// 	}
+// }
+
 impl AudioCallback for SdlCallback {
 	type Channel = f32;
 	fn callback(&mut self, buffer: &mut [Self::Channel]) {
@@ -115,5 +164,9 @@ impl AudioCallback for SdlCallback {
 
 		let mut data = self.data.lock().unwrap();
 		data.fill_buffer(buffer);
+
+		let buffer_i16 = vec_f32_to_i16_linear(buffer);
+		println!("Audio buffer: {:?}",  &buffer_i16[..buffer_i16.len().min(10)]);
+		write_vec_i16_to_file(&buffer_i16, "test.pcm");
 	}
 }

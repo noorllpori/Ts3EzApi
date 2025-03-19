@@ -278,60 +278,36 @@ async fn main() -> Result<()> {
             // println!("Loop");
 			if let StreamItem::Audio(packet) = e {
 
-                // 获取到流
-                // println!("Stream");
-                // println!("{:?}", packet);
-                // packet.data().data() > 包含音频数据的结构体
-                let _empty = packet.data().data().data().len() <= 1;
-                let codec = packet.data().data().codec(); 
-                let packet_len = packet.data().data().data().len();
-                // println!("d > {:?}", codec);
-                // println!("l > {}", packet_len);
-                // 检查编解码类型
-                if codec != CodecType::OpusMusic && codec != CodecType::OpusVoice {
-                    println!("未知编码");
-                }
-                // 处理音频数据               
-                let pack_encode: std::result::Result<Vec<i16>, Error> = decode_packet_i16(packet);
-                match pack_encode {
-                    Ok(decoded_data) => {
-                        write_vec_i16_to_file(&decoded_data, "test.pcm");
-                    }
-                    Err(e) => {
-                        // 处理错误
-                        eprintln!("Failed to decode packet: {}", e);
-                    }
-                }
-                // let pack_encode: std::result::Result<Vec<f32>, Error> = decode_packet(packet);
-                // // println!("{:?}", pack_encode);
-                // let data_i16: Vec<i16>;     // 音频16bitpcm
+                // 推送到播放设备
+				let from = ClientId(match packet.data().data() {
+					AudioData::S2C { from, .. } => *from,
+					AudioData::S2CWhisper { from, .. } => *from,
+					_ => panic!("Can only handle S2C packets but got a C2S packet"),
+				});
+				let mut t2a = t2a.lock().unwrap();
+				if let Err(error) = t2a.play_packet((con_id, from), packet) {
+					debug!(%error, "Failed to play packet");
+				}
+                
+                // // 获取到流
+                // let _empty = packet.data().data().data().len() <= 1;
+                // let codec = packet.data().data().codec(); 
+                // let packet_len = packet.data().data().data().len();
+                // // 检查编解码类型
+                // if codec != CodecType::OpusMusic && codec != CodecType::OpusVoice {
+                //     println!("未知编码");
+                // }
+                // // 处理音频数据               
+                // let pack_encode: std::result::Result<Vec<i16>, Error> = decode_packet_i16(packet);
                 // match pack_encode {
                 //     Ok(decoded_data) => {
-
-                //         // let formatted = format_vec_f32(&decoded_data);
-                //         // println!("[{}]", formatted);
-                //         data_i16 = vec_f32_to_i16_linear(&decoded_data); 
-                //         // let size_in_bytes = std::mem::size_of_val(&*data_i16); // 获取 vec 的内存占用大小
-                //         // println!("Vec memory size: {} bytes", size_in_bytes);
-                //         write_vec_i16_to_file(&data_i16, "test.pcm");
-                        
+                //         write_vec_i16_to_file(&decoded_data, "test.pcm");
                 //     }
                 //     Err(e) => {
                 //         // 处理错误
                 //         eprintln!("Failed to decode packet: {}", e);
                 //     }
                 // }
-
-                // // 推送到播放设备
-				// let from = ClientId(match packet.data().data() {
-				// 	AudioData::S2C { from, .. } => *from,
-				// 	AudioData::S2CWhisper { from, .. } => *from,
-				// 	_ => panic!("Can only handle S2C packets but got a C2S packet"),
-				// });
-				// let mut t2a = t2a.lock().unwrap();
-				// if let Err(error) = t2a.play_packet((con_id, from), packet) {
-				// 	debug!(%error, "Failed to play packet");
-				// }
 			}
 			Ok(())
 		});

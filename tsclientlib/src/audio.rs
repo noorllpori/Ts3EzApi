@@ -286,7 +286,7 @@ impl AudioQueue {
 		self.packet_loss_num += 1;
 
 		self.decoded_buffer.resize(self.decoded_pos + len * CHANNEL_NUM, 0.0);
-		let len = self
+		let len: usize = self
 			.decoder
 			.decode_float(
 				packet_data,
