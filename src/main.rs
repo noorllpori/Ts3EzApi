@@ -1,8 +1,11 @@
 
 use clap::{Arg, Command};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Error, Result,anyhow};
 use futures::prelude::*;
 use tracing::{debug, info};
+
+use std::fs::OpenOptions;
+use std::io::Write;
 
 // use tokio::signal;
 use tokio::sync::mpsc;
@@ -15,52 +18,14 @@ use tsclientlib::{ClientId, ChannelId, Connection, DisconnectOptions, Identity, 
 // audio play
 use tokio::task::LocalSet;
 mod audio_utils;
-use tsproto_packets::packets::{AudioData, CodecType, OutAudio};
-use rand::Rng;
-use std::sync::{Arc, Mutex};
-use std::collections::VecDeque;
+use tsproto_packets::packets::{InAudioBuf, CodecType, AudioData};
+use audiopus::{packet, Channels, MutSignals, SampleRate};
+use audiopus::coder::Decoder;
+// use rand::Rng;
+// use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ConnectionId(u64);
-
-struct AudioBuffer {
-    buffer: Arc<Mutex<VecDeque<u8>>>,
-}
-
-impl AudioBuffer {
-    fn new() -> Self {
-        AudioBuffer {
-            buffer: Arc::new(Mutex::new(VecDeque::new())),
-        }
-    }
-
-    fn push(&self, data: &[u8]) {
-        let mut buffer = self.buffer.lock().unwrap();
-        buffer.extend(data.iter().cloned());
-    }
-
-    fn pop(&self, size: usize) -> Option<Vec<u8>> {
-        let mut buffer = self.buffer.lock().unwrap();
-        if buffer.len() >= size {
-            let mut result = Vec::with_capacity(size);
-            for _ in 0..size {
-                if let Some(byte) = buffer.pop_front() {
-                    result.push(byte);
-                }
-            }
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
-
-fn convert_to_pcm_16khz_8bit(audio_data: &[u8]) -> Vec<u8> {
-    // 这里实现音频数据的转换逻辑
-    // 例如，使用 `cpal` 或 `rodio` 库进行转换
-    // 这里只是一个示例，实际实现可能需要更复杂的处理
-    audio_data.to_vec()
-}
 
 /// `channels` have to be ordered.
 fn print_channels(clients: &[&Client], channels: &[&Channel], parent: ChannelId, depth: usize) {
@@ -90,6 +55,42 @@ fn print_channel_tree(con: &data::Connection) {
 	println!("{}", con.server.name);
 	print_channels(&clients, &channels, ChannelId(0), 0);
 }
+
+fn decode_packet(packet: InAudioBuf) -> Result<Vec<f32>, anyhow::Error> {
+
+    // let packet_data: Option<packet::Packet<'_>>;
+    let audio_data = packet.data().data();
+    
+    // 检查是否是 Opus 编码
+    if audio_data.codec() != tsproto_packets::packets::CodecType::OpusMusic &&
+       audio_data.codec() != tsproto_packets::packets::CodecType::OpusVoice {
+        return Err(anyhow!("Unsupported codec"));
+    }
+
+    // 获取 Opus 编码的音频数据
+    let encoded_data = Some(
+        packet.data().data().data().try_into()
+            .context("Failed to convert packet data")?
+    );
+    
+    // 创建 Opus 解码器
+    let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)
+        .map_err(|e| anyhow!("Decoder creation failed: {}", e))?;
+
+    let mut pcm_buffer = vec![0.0; 48000]; // 预分配缓冲区
+    let len = decoder.decode_float(
+        encoded_data,
+        (&mut pcm_buffer[..])
+            .try_into()
+            .map_err(|e| anyhow::anyhow!("Failed to convert pcm_buffer slice: {:?}", e))?,
+        false
+    )?;
+    
+    pcm_buffer.truncate(len * 2); // 由于是双通道，调整缓冲区大小
+    
+    Ok(pcm_buffer)
+}
+
 
 #[tokio::main] // 启用异步运行时
 async fn main() -> Result<()> {
@@ -197,15 +198,41 @@ async fn main() -> Result<()> {
 			.send(&mut con)?;
 	}
 
-    let audio_buffer = AudioBuffer::new();
     // 音频播放
 	loop {
 		let t2a = audiodata.ts2a.clone();
 		let events = con.events().try_for_each(|e| async {
+            // println!("Loop");
 			if let StreamItem::Audio(packet) = e {
-                // 获取流
+                // 获取到流
                 println!("Stream");
-                // // process_audio_packet(&packet, &audio_buffer);
+                // println!("{:?}", packet);
+                // packet.data().data() > 包含音频数据的结构体
+                let _empty = packet.data().data().data().len() <= 1;
+                let codec = packet.data().data().codec(); 
+                let packet_len = packet.data().data().data().len();
+                println!("> {}", packet_len);
+                // 检查编解码类型
+                if codec != CodecType::OpusMusic && codec != CodecType::OpusVoice {
+                    println!("未知编码");
+                }
+                // 处理音频数据
+                let pack_encode = decode_packet(packet);
+                println!("{:?}", pack_encode);
+    
+                // // 将 packet_data 写入到本地的 test.pcm 文件中
+                // if let Some(data) = packet_data {
+                //     let mut file = OpenOptions::new()
+                //         .write(true)
+                //         .append(true)
+                //         .create(true)
+                //         .open("test.pcm")
+                //         .expect("Failed to open file");
+    
+                //     file.write_all(data).expect("Failed to write to file");
+                // }
+
+                // // 推送到播放设备
 				// let from = ClientId(match packet.data().data() {
 				// 	AudioData::S2C { from, .. } => *from,
 				// 	AudioData::S2CWhisper { from, .. } => *from,

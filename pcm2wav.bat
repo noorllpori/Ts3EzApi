@@ -1,0 +1,1 @@
+ffmpeg -f u8 -ar 8000 -ac 1 -i test.pcm -ar 16000 -ac 1 output.wav

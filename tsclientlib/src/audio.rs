@@ -517,9 +517,9 @@ impl<Id: Clone + Debug + Eq + Hash + PartialEq> AudioHandler<Id> {
 		to_remove
 	}
 
-	/// Add a packet to the audio queue.
+	/// 将数据包添加到音频队列中。 Add a packet to the audio queue.
 	///
-	/// If a new client started talking, returns the id of this client.
+	/// 如果新客户端开始通话，则返回此客户端的 ID。 If a new client started talking, returns the id of this client.
 	pub fn handle_packet(&mut self, id: Id, packet: InAudioBuf) -> Result<Option<Id>> {
 		let empty = packet.data().data().data().len() <= 1;
 		let codec = packet.data().data().codec();
