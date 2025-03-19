@@ -1,1 +1,1 @@
-ffmpeg -f u8 -ar 8000 -ac 1 -i test.pcm -ar 16000 -ac 1 output.wav
+ffmpeg -f s16le -ar 48000 -ac 2 -i test.pcm -ar 48000 -ac 2 output.wav

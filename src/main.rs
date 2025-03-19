@@ -5,7 +5,7 @@ use futures::prelude::*;
 use tracing::{debug, info};
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Write};
 
 // use tokio::signal;
 use tokio::sync::mpsc;
@@ -18,8 +18,8 @@ use tsclientlib::{ClientId, ChannelId, Connection, DisconnectOptions, Identity, 
 // audio play
 use tokio::task::LocalSet;
 mod audio_utils;
-use tsproto_packets::packets::{InAudioBuf, CodecType, AudioData};
-use audiopus::{packet, Channels, MutSignals, SampleRate};
+use tsproto_packets::packets::{InAudioBuf, CodecType,AudioData};
+use audiopus::{ Channels, SampleRate};
 use audiopus::coder::Decoder;
 // use rand::Rng;
 // use std::sync::{Arc, Mutex};
@@ -57,9 +57,8 @@ fn print_channel_tree(con: &data::Connection) {
 }
 
 fn decode_packet(packet: InAudioBuf) -> Result<Vec<f32>, anyhow::Error> {
-
     // let packet_data: Option<packet::Packet<'_>>;
-    let audio_data = packet.data().data();
+    let audio_data: &tsproto_packets::packets::AudioData<'_> = packet.data().data();
     
     // 检查是否是 Opus 编码
     if audio_data.codec() != tsproto_packets::packets::CodecType::OpusMusic &&
@@ -68,7 +67,7 @@ fn decode_packet(packet: InAudioBuf) -> Result<Vec<f32>, anyhow::Error> {
     }
 
     // 获取 Opus 编码的音频数据
-    let encoded_data = Some(
+    let encoded_data: Option<audiopus::packet::Packet<'_>> = Some(
         packet.data().data().data().try_into()
             .context("Failed to convert packet data")?
     );
@@ -86,11 +85,85 @@ fn decode_packet(packet: InAudioBuf) -> Result<Vec<f32>, anyhow::Error> {
         false
     )?;
     
-    pcm_buffer.truncate(len * 2); // 由于是双通道，调整缓冲区大小
+    pcm_buffer.truncate(len * 2);
+
+    pcm_buffer.drain(0..74);
     
     Ok(pcm_buffer)
 }
 
+fn decode_packet_i16(packet: InAudioBuf) -> Result<Vec<i16>, anyhow::Error> {
+    // let packet_data: Option<packet::Packet<'_>>;
+    let audio_data: &tsproto_packets::packets::AudioData<'_> = packet.data().data();
+    
+    // 检查是否是 Opus 编码
+    if audio_data.codec() != tsproto_packets::packets::CodecType::OpusMusic &&
+       audio_data.codec() != tsproto_packets::packets::CodecType::OpusVoice {
+        return Err(anyhow!("Unsupported codec"));
+    }
+
+    // 获取 Opus 编码的音频数据
+    let encoded_data: Option<audiopus::packet::Packet<'_>> = Some(
+        packet.data().data().data().try_into()
+            .context("Failed to convert packet data")?
+    );
+    
+    // 创建 Opus 解码器
+    let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)
+        .map_err(|e| anyhow!("Decoder creation failed: {}", e))?;
+
+    let mut pcm_buffer = vec![0i16; 48000]; // 预分配缓冲区
+    let len = decoder.decode(
+        encoded_data,
+        (&mut pcm_buffer[..])
+            .try_into()
+            .map_err(|e| anyhow::anyhow!("Failed to convert pcm_buffer slice: {:?}", e))?,
+        false
+    )?;
+    
+    pcm_buffer.truncate(len * 2);
+    
+    Ok(pcm_buffer)
+}
+
+fn vec_f32_to_i16_linear(vec: &[f32]) -> Vec<i16> {
+    vec.iter()
+        .map(|&x| {
+            let scaled = x * 65535.0 * 1.6;
+            // let scaled = x * 32767.5 +  32767.5 ;
+            scaled.clamp(-65535.0, 65535.0) as i16
+        })
+        .collect()
+}
+
+fn write_vec_i16_to_file(data: &[i16], filename: &str) -> io::Result<()> {
+    // 打开文件（追加模式，如果文件不存在则创建）
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(filename)?;
+
+    // 将 Vec<i16> 转换为字节数组
+    let bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(
+            data.as_ptr() as *const u8,
+            data.len() * std::mem::size_of::<i16>(),
+        )
+    };
+
+    // 将字节数组写入文件
+    file.write_all(bytes)?;
+
+    Ok(())
+}
+
+fn format_vec_f32(vec: &[f32]) -> String {
+    vec.iter()
+        .map(|&x| format!("{:.8}f", x)) 
+        .collect::<Vec<String>>()
+        .join(", ") // 用逗号和空格分隔
+}
 
 #[tokio::main] // 启用异步运行时
 async fn main() -> Result<()> {
@@ -204,32 +277,49 @@ async fn main() -> Result<()> {
 		let events = con.events().try_for_each(|e| async {
             // println!("Loop");
 			if let StreamItem::Audio(packet) = e {
+
                 // 获取到流
-                println!("Stream");
+                // println!("Stream");
                 // println!("{:?}", packet);
                 // packet.data().data() > 包含音频数据的结构体
                 let _empty = packet.data().data().data().len() <= 1;
                 let codec = packet.data().data().codec(); 
                 let packet_len = packet.data().data().data().len();
-                println!("> {}", packet_len);
+                // println!("d > {:?}", codec);
+                // println!("l > {}", packet_len);
                 // 检查编解码类型
                 if codec != CodecType::OpusMusic && codec != CodecType::OpusVoice {
                     println!("未知编码");
                 }
-                // 处理音频数据
-                let pack_encode = decode_packet(packet);
-                println!("{:?}", pack_encode);
-    
-                // // 将 packet_data 写入到本地的 test.pcm 文件中
-                // if let Some(data) = packet_data {
-                //     let mut file = OpenOptions::new()
-                //         .write(true)
-                //         .append(true)
-                //         .create(true)
-                //         .open("test.pcm")
-                //         .expect("Failed to open file");
-    
-                //     file.write_all(data).expect("Failed to write to file");
+                // 处理音频数据               
+                let pack_encode: std::result::Result<Vec<i16>, Error> = decode_packet_i16(packet);
+                match pack_encode {
+                    Ok(decoded_data) => {
+                        write_vec_i16_to_file(&decoded_data, "test.pcm");
+                    }
+                    Err(e) => {
+                        // 处理错误
+                        eprintln!("Failed to decode packet: {}", e);
+                    }
+                }
+                // let pack_encode: std::result::Result<Vec<f32>, Error> = decode_packet(packet);
+                // // println!("{:?}", pack_encode);
+                // let data_i16: Vec<i16>;     // 音频16bitpcm
+                // match pack_encode {
+                //     Ok(decoded_data) => {
+
+                //         // let formatted = format_vec_f32(&decoded_data);
+                //         // println!("[{}]", formatted);
+                //         data_i16 = vec_f32_to_i16_linear(&decoded_data); 
+                //         // let size_in_bytes = std::mem::size_of_val(&*data_i16); // 获取 vec 的内存占用大小
+                //         // println!("Vec memory size: {} bytes", size_in_bytes);
+                //         write_vec_i16_to_file(&data_i16, "test.pcm");
+                        
+                //     }
+                //     Err(e) => {
+                //         // 处理错误
+                //         eprintln!("Failed to decode packet: {}", e);
+                //     }
                 // }
 
                 // // 推送到播放设备
