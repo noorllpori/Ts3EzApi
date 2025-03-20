@@ -213,43 +213,43 @@ async fn main() -> Result<()> {
     println!("Client Name: {}", name);
     println!("I/O Port: {}", io_port);
 
-    // 开始构建 Socket 服务端
-    let addrw: String = format!("127.0.0.1:{}", io_port);
+    // // 开始构建 Socket 服务端
+    // let addrw: String = format!("127.0.0.1:{}", io_port);
 
-    // 绑定 TCP 监听器
-    let listener = TcpListener::bind(&addrw).await.unwrap();
-    println!("WebSocket server listening on: {}", addrw);
+    // // 绑定 TCP 监听器
+    // let listener = TcpListener::bind(&addrw).await.unwrap();
+    // println!("WebSocket server listening on: {}", addrw);
 
-    loop {
-        // 等待客户端连接
-        let (stream, addr) = listener.accept().await.unwrap();
-        println!("New connection from: {}", addr);
+    // loop {
+    //     // 等待客户端连接
+    //     let (stream, addr) = listener.accept().await.unwrap();
+    //     println!("New connection from: {}", addr);
 
-        // 处理 WebSocket 连接
-        tokio::spawn(async move {
-            // 尝试将 TCP 流升级为 WebSocket 连接
-            if let Ok(ws_stream) = accept_async(stream).await {
-                println!("WebSocket connection established with: {}", addr);
+    //     // 处理 WebSocket 连接
+    //     tokio::spawn(async move {
+    //         // 尝试将 TCP 流升级为 WebSocket 连接
+    //         if let Ok(ws_stream) = accept_async(stream).await {
+    //             println!("WebSocket connection established with: {}", addr);
 
-                let (mut write, mut read) = ws_stream.split();
+    //             let (mut write, mut read) = ws_stream.split();
 
-                // 处理 WebSocket 消息
-                while let Some(Ok(message)) = read.next().await {
-                    println!("Received message from {}: {:?}", addr, message);
+    //             // 处理 WebSocket 消息
+    //             while let Some(Ok(message)) = read.next().await {
+    //                 println!("Received message from {}: {:?}", addr, message);
 
-                    // 发送响应
-                    if let Err(e) = write.send(message).await {
-                        println!("Error sending message to {}: {}", addr, e);
-                        break;
-                    }
-                }
-            } else {
-                println!("Failed to upgrade TCP connection to WebSocket with: {}", addr);
-            }
+    //                 // 发送响应
+    //                 if let Err(e) = write.send(message).await {
+    //                     println!("Error sending message to {}: {}", addr, e);
+    //                     break;
+    //                 }
+    //             }
+    //         } else {
+    //             println!("Failed to upgrade TCP connection to WebSocket with: {}", addr);
+    //         }
 
-            println!("Connection closed: {}", addr);
-        });
-    }
+    //         println!("Connection closed: {}", addr);
+    //     });
+    // }
 
 
     // 準備參數
