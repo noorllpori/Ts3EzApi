@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket Connection</title>
+</head>
+<body>
+    <h1>Socket Connection Example</h1>
+    <button id="connectButton">Connect to Socket</button>
+    <p id="status">Not connected</p>
+
+    <script>
+        document.getElementById('connectButton').addEventListener('click', function() {
+            const socket = new WebSocket('ws://127.0.0.1:43500');
+
+            socket.onopen = function() {
+                document.getElementById('status').textContent = 'Connected to Socket';
+                console.log('WebSocket connection established.');
+            };
+
+            socket.onmessage = function(event) {
+                console.log('Message from server:', event.data);
+            };
+
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                document.getElementById('status').textContent = 'Connection error';
+            };
+
+            socket.onclose = function() {
+                console.log('WebSocket connection closed.');
+                document.getElementById('status').textContent = 'Connection closed';
+            };
+        });
+    </script>
+</body>
+</html>
