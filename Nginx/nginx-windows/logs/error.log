@@ -1,0 +1,2 @@
+2025/03/23 07:37:03 [error] 113704#106580: *1 CreateFile() "I:\QQ\haha\nginx-1.26.3/html/favicon.ico" failed (2: The system cannot find the file specified), client: 127.0.0.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "127.0.0.1", referrer: "http://127.0.0.1/"
+2025/03/23 07:44:10 [error] 113752#109056: *1 CreateFile() "I:\QQ\haha\nginx-1.26.3/html/favicon.ico" failed (2: The system cannot find the file specified), client: 192.168.31.148, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "192.168.31.148", referrer: "http://192.168.31.148/"

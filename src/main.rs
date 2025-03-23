@@ -24,6 +24,7 @@ use tsclientlib::{ClientId, ChannelId, Connection, DisconnectOptions, Identity, 
 // audio play
 use tokio::task::LocalSet;
 mod audio_utils;
+mod audio_stream_utils;
 use tsproto_packets::packets::{InAudioBuf, CodecType,AudioData};
 use audiopus::{ Channels, SampleRate};
 use audiopus::coder::Decoder;
@@ -255,7 +256,8 @@ async fn main() -> Result<()> {
     // 準備參數
 	let con_id = ConnectionId(0);
 	let local_set = LocalSet::new();
-	let audiodata = audio_utils::start(&local_set)?;
+	// let audiodata = audio_utils::start(&local_set)?;
+	let audiodata = audio_stream_utils::start_nosdl(&local_set)?;
     
     // 开始创建链接
 	let con_config = Connection::build(ip.as_str());     
@@ -324,7 +326,7 @@ async fn main() -> Result<()> {
 			if let StreamItem::Audio(packet) = e {
 
                 // 推送到播放设备
-				let from = ClientId(match packet.data().data() {
+				let from: ClientId = ClientId(match packet.data().data() {
 					AudioData::S2C { from, .. } => *from,
 					AudioData::S2CWhisper { from, .. } => *from,
 					_ => panic!("Can only handle S2C packets but got a C2S packet"),
@@ -333,6 +335,10 @@ async fn main() -> Result<()> {
 				if let Err(error) = t2a.play_packet((con_id, from), packet) {
 					debug!(%error, "Failed to play packet");
 				}
+                
+                // 获取当前的音频数据
+                let buffer_i16 = t2a.get_buff_i16();
+                println!("Audio buffer (i16): {:?}", &buffer_i16[..buffer_i16.len().min(30)]); // 打印前 30 个样本
 
                 // // 获取到流
                 // let _empty = packet.data().data().data().len() <= 1;
@@ -346,7 +352,8 @@ async fn main() -> Result<()> {
                 // let pack_encode: std::result::Result<Vec<i16>, Error> = decode_packet_i16(packet);
                 // match pack_encode {
                 //     Ok(decoded_data) => {
-                //         write_vec_i16_to_file(&decoded_data, "test.pcm");
+                //         println!("Audio buffer: {:?}",  &decoded_data[..decoded_data.len().min(30)]);
+                //         // write_vec_i16_to_file(&decoded_data, "test.pcm");
                 //     }
                 //     Err(e) => {
                 //         // 处理错误
